@@ -1,0 +1,24 @@
+appId: com.milk.classpoints
+productName: mwcpm-system
+copyright: Copyright © 2026 牛奶智慧班级积分系统
+buildVersion: 1.0.1B23
+directories:
+  buildResources: build
+  output: dist\windows-x64
+files:
+  - out/**
+  - package.json
+extraResources:
+  - from: build/icon.png
+    to: icon.png
+  - from: build/milk-logo.png
+    to: milk-logo.png
+asarUnpack:
+  - resources/**
+win:
+  icon: build/icon.ico
+  target:
+    - target: dir
+      arch:
+        - x64
+
