@@ -21,6 +21,7 @@ import {
 } from '@element-plus/icons-vue'
 import { useDataStore } from '../stores/data'
 import { useAuthStore } from '../stores/auth'
+import { APP_VERSION } from '@shared/app-version'
 import { resolveAppLogo } from '../utils/logo'
 import { ElMessage } from 'element-plus'
 
@@ -76,7 +77,7 @@ onMounted(async () => {
   try {
     appInfo.value = await window.api.appInfo()
   } catch {
-    appInfo.value = { version: '1.0.0' }
+    appInfo.value = { version: APP_VERSION }
   }
 })
 </script>
@@ -140,7 +141,7 @@ onMounted(async () => {
       </main>
 
       <footer class="footer">
-        <span>牛奶智慧班级积分 v{{ appInfo?.version ?? '1.0.0' }}</span>
+        <span>牛奶智慧班级积分 v{{ appInfo?.version ?? APP_VERSION }}</span>
         <span class="footer-sep">·</span>
         <span>所有数据保存在本机，离线可用</span>
         <span class="footer-sep">·</span>

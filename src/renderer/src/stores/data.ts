@@ -20,6 +20,7 @@ import { DEFAULT_PASSWORD } from '../utils/defaults'
 import { createEmptyData, DATA_VERSION, createDefaultSettings } from '../utils/defaults'
 import { genId } from '../utils/format'
 import { pinyinFull } from '../utils/pinyin'
+import { useAuthStore } from './auth'
 
 const DATA_KEY = 'milk-class-points:data'
 
@@ -527,12 +528,35 @@ export const useDataStore = defineStore('data', () => {
   }
 
   // ===== 记录管理 =====
-  function removeRecord(id: string): void {
-    state.records = state.records.filter((r) => r.id !== id)
+  /**
+   * 积分记录删除权限检查：仅管理员密码登录（pwd 文件）获得的身份可删除。
+   * 返回 null 表示有权限，否则返回提示语。这里做真实拦截，
+   * 界面禁用只是辅助——即使绕过界面直接调用也会被拒绝。
+   */
+  function checkRecordPermission(): string | null {
+    let admin = false
+    try {
+      admin = useAuthStore().isAdmin
+    } catch {
+      admin = false
+    }
+    return admin ? null : '仅管理员身份可删除积分记录，请使用管理员密码登录'
   }
 
-  function clearRecords(): void {
+  function removeRecord(id: string): OpResult {
+    const denied = checkRecordPermission()
+    if (denied) return { ok: false, message: denied }
+    const before = state.records.length
+    state.records = state.records.filter((r) => r.id !== id)
+    return { ok: before !== state.records.length }
+  }
+
+  function clearRecords(): OpResult {
+    const denied = checkRecordPermission()
+    if (denied) return { ok: false, message: denied }
+    const count = state.records.length
     state.records = []
+    return { ok: true, count }
   }
 
   // ===== 导入导出 =====

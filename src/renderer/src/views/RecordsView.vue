@@ -4,10 +4,12 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Download, Delete, Document, RefreshLeft } from '@element-plus/icons-vue'
 import type { PointsRecord, RecordType } from '../types'
 import { useDataStore } from '../stores/data'
+import { useAuthStore } from '../stores/auth'
 import { formatDateTime, formatDate, daysAgoKey, todayKey } from '../utils/date'
 import { recordTypeLabel, signedScore, toCsv } from '../utils/format'
 
 const data = useDataStore()
+const auth = useAuthStore()
 const s = () => data.state
 
 // ===== 筛选 =====
@@ -53,20 +55,29 @@ function openDetail(row: PointsRecord): void {
 
 // ===== 删除 =====
 function removeRecord(row: PointsRecord): void {
+  if (!auth.isAdmin) {
+    ElMessage.warning('仅管理员身份可删除积分记录，请使用管理员密码登录')
+    return
+  }
   ElMessageBox.confirm('确定删除这条积分记录吗？删除后不可恢复。', '删除确认', {
     confirmButtonText: '删除',
     cancelButtonText: '取消',
     type: 'warning'
   })
     .then(() => {
-      data.removeRecord(row.id)
-      ElMessage.success('记录已删除')
+      const res = data.removeRecord(row.id)
+      if (res.ok) ElMessage.success('记录已删除')
+      else ElMessage.error(res.message ?? '删除失败')
     })
     .catch(() => {})
 }
 
 // ===== 清空（二次确认） =====
 function clearAll(): void {
+  if (!auth.isAdmin) {
+    ElMessage.warning('仅管理员身份可清空积分记录，请使用管理员密码登录')
+    return
+  }
   ElMessageBox.confirm(
     `确定清空全部 ${s().records.length} 条积分记录吗？此操作不可恢复。`,
     '清空确认',
@@ -84,8 +95,9 @@ function clearAll(): void {
       })
     })
     .then(() => {
-      data.clearRecords()
-      ElMessage.success('积分记录已清空')
+      const res = data.clearRecords()
+      if (res.ok) ElMessage.success('积分记录已清空')
+      else ElMessage.error(res.message ?? '清空失败')
     })
     .catch(() => {})
 }
@@ -196,15 +208,27 @@ function resetFilters(): void {
       <div class="flex gap8">
         <el-button :icon="Download" @click="exportCsv">导出 CSV</el-button>
         <el-button :icon="Document" @click="exportJson">导出 JSON</el-button>
-        <el-button type="danger" plain :icon="Delete" :disabled="s().records.length === 0" @click="clearAll">清空记录</el-button>
+        <el-tooltip :disabled="auth.isAdmin" content="仅管理员身份可清空积分记录" placement="top">
+          <span>
+            <el-button type="danger" plain :icon="Delete" :disabled="!auth.isAdmin || s().records.length === 0" @click="clearAll">
+              清空记录
+            </el-button>
+          </span>
+        </el-tooltip>
       </div>
     </div>
 
     <div class="glass-card table-card">
       <div class="flex-between mb12">
-        <span class="text-secondary" style="font-size: 13px">
-          共 {{ totalRecords }} 条记录{{ dateRange ? '（当前筛选区间）' : '' }}
-        </span>
+        <div class="flex gap8 items-center">
+          <span class="text-secondary" style="font-size: 13px">
+            共 {{ totalRecords }} 条记录{{ dateRange ? '（当前筛选区间）' : '' }}
+          </span>
+          <el-tag v-if="!auth.isAdmin" size="small" type="info" effect="plain">
+            当前身份：{{ auth.operatorType }} · 删除功能已禁用
+          </el-tag>
+          <el-tag v-else size="small" type="success" effect="plain">当前身份：管理员 · 可删除记录</el-tag>
+        </div>
         <div class="flex gap8">
           <el-tag size="small" type="success">加分 = 绿色</el-tag>
           <el-tag size="small" type="danger">减分 = 红色</el-tag>
@@ -263,7 +287,13 @@ function resetFilters(): void {
         <el-table-column label="操作" width="120" fixed="right">
           <template #default="{ row }">
             <el-button text size="small" type="primary" @click="openDetail(row as PointsRecord)">详情</el-button>
-            <el-button text size="small" type="danger" @click="removeRecord(row as PointsRecord)">删除</el-button>
+            <el-tooltip :disabled="auth.isAdmin" content="仅管理员身份可删除记录" placement="top">
+              <span>
+                <el-button text size="small" type="danger" :disabled="!auth.isAdmin" @click="removeRecord(row as PointsRecord)">
+                  删除
+                </el-button>
+              </span>
+            </el-tooltip>
           </template>
         </el-table-column>
       </el-table>

@@ -1,5 +1,9 @@
-﻿node_modules/
+node_modules/
 out/
 dist/
 *.log
 .DS_Store
+icon/
+
+# 管理员密码文件（不要提交到公开仓库）
+pwd

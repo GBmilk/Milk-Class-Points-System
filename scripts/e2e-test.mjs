@@ -1,4 +1,7 @@
 ﻿// ===== 端到端功能测试 v2（通过 CDP 驱动应用） =====
+import { existsSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 const BASE = 'http://127.0.0.1:9222'
 
 async function getPage() {
@@ -97,6 +100,28 @@ const pickVisible = (txt) =>
 const confirmBox = () =>
   // 取最后一个弹窗：页面上可能残留已关闭但未移除的旧弹窗，必须点击最新打开的那个
   ev(`(() => { const boxes = [...document.querySelectorAll('.el-message-box')]; const box = boxes[boxes.length - 1]; if (!box) return false; const b = box.querySelector('.el-button--primary'); if (!b) return false; b.click(); return true })()`)
+// 二次确认弹窗点击（同时兼容 primary / danger 确认按钮，取最后一个弹窗）
+const confirmBoxAny = () =>
+  ev(`(() => {
+    const boxes = [...document.querySelectorAll('.el-message-box')]
+    const box = boxes[boxes.length - 1]
+    if (!box) return false
+    const btns = [...box.querySelectorAll('.el-message-box__btns .el-button')]
+    const target = btns.find((b) => b.classList.contains('el-button--primary') || b.classList.contains('el-button--danger')) ?? btns[btns.length - 1]
+    if (!target) return false
+    target.click()
+    return true
+  })()`)
+const logoutByNav = () =>
+  ev(`(() => { const els=[...document.querySelectorAll('.nav-item')]; const el=els.find((b)=>b.textContent.includes('退出登录')); if(el) el.click(); return true })()`)
+const storeState = (expr) =>
+  ev(`(() => {
+    const app = document.querySelector('#app').__vue_app__
+    const pinia = app.config.globalProperties.$pinia
+    const data = pinia._s.get('data')
+    const auth = pinia._s.get('auth')
+    return (${expr})
+  })()`)
 // 记录数统计：IndexedDB 优先，localStorage 兜底（与应用持久化逻辑一致）
 const dbRecordsCount = () =>
   ev(`(() => new Promise((res) => {
@@ -507,28 +532,79 @@ await clickText('登 录')
 await wait(1000)
 check('新密码登录成功', (await hash()) === '#/', await hash())
 
-// S25 管理员密码文件（生成 + 登录）
+// S25 管理员密码文件位置（软件运行目录）——开发运行时即项目根目录
+const pwdFile = join(process.cwd(), 'pwd')
+check('pwd 文件位于软件运行目录（开发运行=项目根目录）', existsSync(pwdFile), pwdFile)
+// 写入已知管理员密码，验证「文件已存在时按文件内容校验、不覆盖」
+writeFileSync(pwdFile, 'admin888', 'utf8')
+
+// S25-1 系统设置不再显示管理员选项
 await ev('location.hash = "#/settings"')
 await wait(900)
-await clickTab('管理员文件')
+const noAdminTab = await ev(`[...document.querySelectorAll('.el-tabs__item')].every((t) => !t.textContent.includes('管理员'))`)
+check('系统设置不再显示管理员选项（选项卡）', noAdminTab)
+const settingsTxt = await bodyText()
+check('系统设置不出现管理员密码文件区域', !settingsTxt.includes('管理员密码文件') && !settingsTxt.includes('生成 / 更新 pwd 文件'))
+await clickTab('关于')
 await wait(500)
-await clickText('生成 / 更新 pwd 文件')
-await waitFor('.el-dialog .el-input input')
-await ev(`(() => { const els=[...document.querySelectorAll('.el-dialog .el-input input')]; const set=(el,v)=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,v); el.dispatchEvent(new Event('input',{bubbles:true}))}; set(els[0],'admin888'); set(els[1],'admin888') })()`)
-await clickExactIn('.el-dialog', '写入文件')
-await wait(800)
-msg = await lastMessage()
-check('pwd 文件创建成功', msg.includes('已创建'), msg)
-const pwdPath = await ev(`[...document.querySelectorAll('.el-descriptions__content')].map((x) => x.textContent).find((t) => t.includes('pwd')) ?? ''`)
-check('设置页显示 pwd 文件路径', pwdPath.length > 0, pwdPath)
-await ev(`(() => { const els=[...document.querySelectorAll('.nav-item')]; const el=els.find((b)=>b.textContent.includes('退出登录')); if(el) el.click(); return true })()`)
+const aboutTxt = await bodyText()
+check('关于页显示作者 GB牛奶', aboutTxt.includes('GB牛奶'))
+check('关于页显示版权信息', aboutTxt.includes('Copyright') || aboutTxt.includes('版权'))
+check('关于页显示版本 v1.0.1B24', aboutTxt.includes('1.0.1B24'), aboutTxt.match(/v1\.[0-9A-Za-z.]+/)?.[0] ?? '')
+check('关于页不显示框架信息', !aboutTxt.includes('Electron') && !aboutTxt.includes('Chromium'))
+
+// S25-2 普通身份：积分记录删除按钮禁用 + 数据层拦截
+await ev('location.hash = "#/records"')
+await wait(900)
+const delDisabled = await ev(`(() => { const btns=[...document.querySelectorAll('.el-table__body-wrapper .el-button')]; const del=btns.find((b)=>b.textContent.trim()==='删除'); return del ? del.disabled === true : null })()`)
+check('普通身份：单条「删除」按钮禁用', delDisabled === true, String(delDisabled))
+const clearDisabled = await ev(`(() => { const b=[...document.querySelectorAll('.el-button')].find((x)=>x.textContent.includes('清空记录')); return b ? b.disabled === true : null })()`)
+check('普通身份：「清空记录」按钮禁用', clearDisabled === true, String(clearDisabled))
+const noConfirmBox = await ev(`(() => { const btns=[...document.querySelectorAll('.el-table__body-wrapper .el-button')]; const del=btns.find((b)=>b.textContent.trim()==='删除'); if(!del) return null; del.click(); return document.querySelectorAll('.el-message-box').length === 0 })()`)
+check('普通身份：点击删除不会弹出确认框', noConfirmBox === true, String(noConfirmBox))
+const normalGuard = await storeState(`(function () {
+  const before = data.state.records.length
+  const target = data.state.records[0]
+  const r1 = target ? data.removeRecord(target.id) : { ok: true }
+  const r2 = data.clearRecords()
+  return { identity: auth.operatorType, isAdmin: auth.isAdmin, before, after: data.state.records.length, ok1: r1.ok, ok2: r2.ok, msg: r1.message ?? '' }
+})()`)
+check('普通身份：数据层拦截删除（绕过界面同样无效）', normalGuard.isAdmin === false && normalGuard.after === normalGuard.before && normalGuard.ok1 === false && normalGuard.ok2 === false, JSON.stringify(normalGuard))
+
+// S25-3 管理员密码登录 → 获得删除权限
+await logoutByNav()
 await wait(800)
 await setInput('.el-input input', 'admin888')
 await clickText('登 录')
 await wait(1000)
-check('管理员密码登录成功', (await hash()) === '#/', await hash())
+check('管理员密码(pwd 文件)登录成功', (await hash()) === '#/', await hash())
 const footerTxt = await ev(`document.querySelector('.footer')?.textContent ?? ''`)
 check('登录身份显示为管理员', footerTxt.includes('管理员'), footerTxt)
+await ev('location.hash = "#/records"')
+await wait(900)
+const adminDelEnabled = await ev(`(() => { const btns=[...document.querySelectorAll('.el-table__body-wrapper .el-button')]; const del=btns.find((b)=>b.textContent.trim()==='删除'); return del ? del.disabled === false : null })()`)
+check('管理员身份：单条「删除」按钮可用', adminDelEnabled === true, String(adminDelEnabled))
+const adminClearEnabled = await ev(`(() => { const b=[...document.querySelectorAll('.el-button')].find((x)=>x.textContent.includes('清空记录')); return b ? b.disabled === false : null })()`)
+check('管理员身份：「清空记录」按钮可用', adminClearEnabled === true, String(adminClearEnabled))
+const recBeforeDel = await dbRecordsCount()
+await ev(`(() => { const btns=[...document.querySelectorAll('.el-table__body-wrapper .el-button')]; const del=btns.find((b)=>b.textContent.trim()==='删除'); if(!del) return false; del.click(); return true })()`)
+await waitFor('.el-message-box', 5000)
+await confirmBoxAny()
+await wait(800)
+let recAfterDel = recBeforeDel
+for (let i = 0; i < 16 && recAfterDel !== recBeforeDel - 1; i++) { recAfterDel = await dbRecordsCount(); if (recAfterDel !== recBeforeDel - 1) await wait(250) }
+check('管理员身份：单条记录删除成功（持久化）', recAfterDel === recBeforeDel - 1, `before=${recBeforeDel} after=${recAfterDel}`)
+
+// S25-4 退出管理员后普通密码登录不继承权限
+await logoutByNav()
+await wait(800)
+await setInput('.el-input input', 'abc12345')
+await clickText('登 录')
+await wait(1000)
+const afterLogout = await storeState(`({ hash: location.hash, identity: auth.operatorType, isAdmin: auth.isAdmin })`)
+check('退出管理员后普通登录不继承权限', afterLogout.hash === '#/' && afterLogout.isAdmin === false && afterLogout.identity === '普通', JSON.stringify(afterLogout))
+
+console.log('（pwd 文件已写入测试密码 admin888，测试结束后会自动恢复为默认值）')
 
 // S26 幸运大转盘（侧边栏独立功能 + 设置抽屉 + 免费抽奖 + 中奖结果 + 记录持久化）
 await ev('location.hash = "#/wheel"')
@@ -613,6 +689,29 @@ await ev(`(() => { const sw = document.querySelector('.el-drawer .el-switch'); i
 await wait(500)
 await ev(`(() => { const b = document.querySelector('.el-drawer__close-btn'); if (b) b.click(); return !!b })()`)
 await wait(400)
+
+// S28 管理员清空全部积分记录（二次确认）
+await logoutByNav()
+await wait(800)
+await setInput('.el-input input', 'admin888')
+await clickText('登 录')
+await wait(1000)
+check('管理员再次登录成功', (await hash()) === '#/', await hash())
+await ev('location.hash = "#/records"')
+await wait(900)
+const beforeClearAll = await dbRecordsCount()
+await ev(`(() => { const b=[...document.querySelectorAll('.el-button')].find((x)=>x.textContent.includes('清空记录')); if(!b) return false; b.click(); return true })()`)
+await waitFor('.el-message-box', 5000)
+await confirmBoxAny()
+await wait(700)
+await confirmBoxAny()
+await wait(900)
+let afterClearAll = beforeClearAll
+for (let i = 0; i < 20 && afterClearAll !== 0; i++) { afterClearAll = await dbRecordsCount(); if (afterClearAll !== 0) await wait(250) }
+check('管理员身份：清空全部积分记录成功（含二次确认）', beforeClearAll > 0 && afterClearAll === 0, `before=${beforeClearAll} after=${afterClearAll}`)
+
+// 测试结束：把 pwd 文件恢复为首次运行的默认管理员密码
+writeFileSync(pwdFile, 'admin123456', 'utf8')
 
 console.log(`
 ======== 测试完成：通过 ${passed} 项，失败 ${failed} 项 ========`)

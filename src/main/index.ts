@@ -2,6 +2,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { registerIpc } from './ipc'
+import { ensurePwdFile } from './pwd'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -68,7 +69,9 @@ if (!app.requestSingleInstanceLock()) {
     }
   })
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
+    // 确保「软件运行目录」内存在 pwd 管理员密码文件（已存在时只读取，不覆盖）
+    await ensurePwdFile()
     registerIpc()
     // 打包后隐藏默认菜单；开发模式保留以便使用开发者工具
     if (app.isPackaged) Menu.setApplicationMenu(null)

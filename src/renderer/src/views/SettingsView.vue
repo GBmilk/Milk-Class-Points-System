@@ -18,6 +18,7 @@ import { createPasswordHash } from '../utils/crypto'
 import { DEFAULT_PASSWORD } from '../utils/defaults'
 import { compressImageFile, readFileAsDataURL, BACKGROUND_IMG_SIZE } from '../utils/image'
 import { formatDateTime } from '../utils/date'
+import { APP_VERSION } from '@shared/app-version'
 import { resolveAppLogo } from '../utils/logo'
 import type { DataState, HashAlgo, SystemSettings } from '../types'
 
@@ -413,57 +414,14 @@ function clearAll(): void {
     })
     .catch(() => {})
 }
-// ===== 管理员密码文件 =====
-const pwdStatus = ref<{ exists: boolean; path: string; dir: string; writable: boolean } | null>(null)
-const pwdCreateVisible = ref(false)
-const pwdCreateForm = reactive({ password: '', confirm: '' })
-const pwdCreating = ref(false)
-
-async function refreshPwdStatus(): Promise<void> {
-  try {
-    pwdStatus.value = await window.api.pwdStatus()
-  } catch (e) {
-    pwdStatus.value = null
-    ElMessage.error('无法获取管理员密码文件状态')
-  }
-}
-
-async function createPwdFile(): Promise<void> {
-  if (pwdCreating.value) return
-  if (!pwdCreateForm.password || pwdCreateForm.password.length < 1) {
-    ElMessage.warning('请输入管理员密码')
-    return
-  }
-  if (pwdCreateForm.password !== pwdCreateForm.confirm) {
-    ElMessage.warning('两次输入的密码不一致')
-    return
-  }
-  pwdCreating.value = true
-  try {
-    const res = await window.api.pwdCreate(pwdCreateForm.password)
-    if (res.ok) {
-      ElMessage.success(`管理员密码文件已创建：${res.path}`)
-      pwdCreateVisible.value = false
-      pwdCreateForm.password = ''
-      pwdCreateForm.confirm = ''
-      await refreshPwdStatus()
-    } else {
-      ElMessage.error(res.error ?? '创建失败，请检查目录权限')
-    }
-  } finally {
-    pwdCreating.value = false
-  }
-}
-
 // ===== 关于 =====
 const appInfo = ref<{ version: string } | null>(null)
 
 onMounted(async () => {
-  await refreshPwdStatus()
   try {
     appInfo.value = await window.api.appInfo()
   } catch {
-    appInfo.value = { version: '1.0.1B23' }
+    appInfo.value = { version: APP_VERSION }
   }
 })
 </script>
@@ -719,49 +677,6 @@ onMounted(async () => {
           </div>
         </div>
       </el-tab-pane>
-      <!-- 管理员文件 -->
-      <el-tab-pane label="管理员文件" name="pwd">
-        <div class="settings-content">
-          <div class="glass-card setting-card">
-            <div class="setting-title flex-between">
-              <span>pwd 管理员密码文件状态</span>
-              <el-button size="small" @click="refreshPwdStatus">刷新检查</el-button>
-            </div>
-            <el-descriptions :column="1" border size="small" class="mt12">
-              <el-descriptions-item label="文件状态">
-                <el-tag :type="pwdStatus?.exists ? 'success' : 'info'" size="small">
-                  {{ pwdStatus?.exists ? '已存在' : '不存在' }}
-                </el-tag>
-                <span class="text-secondary" style="margin-left: 8px; font-size: 12px">
-                  {{ pwdStatus?.exists ? '可用该密码直接登录' : '未启用时仅支持普通密码登录' }}
-                </span>
-              </el-descriptions-item>
-              <el-descriptions-item label="文件路径">{{ pwdStatus?.path ?? '—' }}</el-descriptions-item>
-              <el-descriptions-item label="所在目录">
-                {{ pwdStatus?.dir ?? '—' }}
-                <el-tag v-if="pwdStatus && !pwdStatus.writable" type="danger" size="small" style="margin-left: 8px">无写入权限</el-tag>
-              </el-descriptions-item>
-            </el-descriptions>
-
-            <div class="mt12">
-              <el-button type="warning" @click="pwdCreateVisible = true">生成 / 更新 pwd 文件</el-button>
-              <span class="text-secondary" style="font-size: 12px; margin-left: 10px">不会显示文件中已存在的密码明文</span>
-            </div>
-          </div>
-
-          <div class="glass-card setting-card">
-            <div class="setting-title">pwd 文件使用说明</div>
-            <ol class="usage-list">
-              <li>文件名必须为 <code>pwd</code>（无扩展名），内容直接填写管理员密码文本。</li>
-              <li>普通密码与管理员密码都可以打开程序；登录时输入其中任意一个即可。</li>
-              <li>管理员密码由主进程读取与校验，不会保存在浏览器存储中。</li>
-              <li>文件优先放在可执行文件所在目录；若该目录无写入权限，会自动使用应用数据目录。</li>
-              <li>不要把管理员密码文件提交到公开代码仓库。</li>
-            </ol>
-          </div>
-        </div>
-      </el-tab-pane>
-
       <!-- 关于 -->
       <el-tab-pane label="关于" name="about">
         <div class="settings-content">
@@ -770,10 +685,10 @@ onMounted(async () => {
               <img :src="appLogo" alt="软件图标" />
             </div>
             <div class="about-name">牛奶智慧班级积分</div>
-            <div class="about-version">v{{ appInfo?.version ?? '1.0.1B23' }}</div>
+            <div class="about-version">v{{ appInfo?.version ?? APP_VERSION }}</div>
             <div class="about-desc">让每一分进步都被看见 —— 纯本地离线的班级积分管理桌面应用</div>
             <el-descriptions :column="2" border size="small" class="mt16" style="max-width: 640px">
-              <el-descriptions-item label="版本">v{{ appInfo?.version ?? '1.0.1B23' }}</el-descriptions-item>
+              <el-descriptions-item label="版本">v{{ appInfo?.version ?? APP_VERSION }}</el-descriptions-item>
               <el-descriptions-item label="作者">GB牛奶</el-descriptions-item>
               <el-descriptions-item label="数据存储">本地 IndexedDB / localStorage，离线可用</el-descriptions-item>
               <el-descriptions-item label="版权信息">Copyright © 2026 GB牛奶 · 保留所有权利</el-descriptions-item>
@@ -783,27 +698,9 @@ onMounted(async () => {
         </div>
       </el-tab-pane>
     </el-tabs>
-
-    <!-- 生成 pwd 文件对话框 -->
-    <el-dialog v-model="pwdCreateVisible" title="生成 / 更新管理员密码文件" width="440px" :close-on-click-modal="false">
-      <el-form label-width="100px">
-        <el-form-item label="管理员密码" required>
-          <el-input v-model="pwdCreateForm.password" type="password" show-password placeholder="将写入 pwd 文件" />
-        </el-form-item>
-        <el-form-item label="确认密码" required>
-          <el-input v-model="pwdCreateForm.confirm" type="password" show-password placeholder="再次输入" @keyup.enter="createPwdFile" />
-        </el-form-item>
-      </el-form>
-      <div class="text-secondary" style="font-size: 12px">
-        文件将优先写入可执行文件所在目录；无权限时自动使用应用数据目录。更新会覆盖旧密码。
-      </div>
-      <template #footer>
-        <el-button @click="pwdCreateVisible = false">取消</el-button>
-        <el-button type="primary" :loading="pwdCreating" @click="createPwdFile">写入文件</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
+
 <style scoped>
 .settings-tabs :deep(.el-tabs__header) {
   margin-right: 18px;
@@ -934,20 +831,6 @@ onMounted(async () => {
 .reason-text {
   flex: 1;
   font-size: 13px;
-}
-
-.usage-list {
-  margin: 0;
-  padding-left: 20px;
-  color: var(--app-text-secondary);
-  font-size: 13px;
-  line-height: 2;
-}
-.usage-list code {
-  background: rgba(127, 146, 173, 0.15);
-  padding: 1px 6px;
-  border-radius: 6px;
-  color: var(--el-color-primary);
 }
 
 .about-card {

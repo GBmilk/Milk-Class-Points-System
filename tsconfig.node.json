@@ -1,6 +1,6 @@
 {
   "extends": "./tsconfig.json",
-  "include": ["electron.vite.config.ts", "src/main/**/*", "src/preload/index.ts"],
+  "include": ["electron.vite.config.ts", "src/main/**/*", "src/preload/index.ts", "src/shared/**/*"],
   "compilerOptions": {
     "composite": true,
     "types": ["electron-vite/node", "node"],

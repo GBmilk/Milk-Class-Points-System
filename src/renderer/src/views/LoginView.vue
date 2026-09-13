@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Key, Hide, View, Medal, ShoppingCart, Trophy, Lock, DataAnalysis } from '@element-plus/icons-vue'
 import { useAuthStore } from '../stores/auth'
+import { APP_VERSION } from '@shared/app-version'
 import { useDataStore } from '../stores/data'
 import { resolveAppLogo } from '../utils/logo'
 
@@ -16,7 +17,7 @@ const showPassword = ref(false)
 const loading = ref(false)
 const errorMsg = ref('')
 const shake = ref(false)
-const version = ref('1.0.0')
+const version = ref(APP_VERSION)
 
 /** 软件图标：本地 PNG（用户自定义 > 班级头像 > 内置牛奶图标） */
 const appLogo = computed(() => resolveAppLogo(data.state.settings))

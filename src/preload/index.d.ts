@@ -4,6 +4,8 @@ export interface PwdStatus {
   path: string
   dir: string
   writable: boolean
+  /** 文件是否位于软件运行目录 */
+  inRunDir: boolean
 }
 
 export interface SaveFileOptions {
@@ -42,7 +44,6 @@ declare global {
     api: {
       pwdStatus(): Promise<PwdStatus>
       pwdVerify(password: string): Promise<boolean>
-      pwdCreate(password: string): Promise<{ ok: boolean; path: string; error?: string }>
       saveFile(opts: SaveFileOptions): Promise<string | null>
       openFile(opts: OpenFileOptions): Promise<string | null>
       writeFile(targetPath: string, content: string): Promise<WriteResult>

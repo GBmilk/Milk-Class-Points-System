@@ -1,7 +1,8 @@
-﻿import { app, BrowserWindow, dialog, ipcMain } from 'electron'
+﻿import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { promises as fs } from 'node:fs'
 import { isAbsolute } from 'node:path'
-import { createPwdFile, resolvePwdPath, verifyAdminPassword } from './pwd'
+import { resolvePwdPath, verifyAdminPassword } from './pwd'
+import { APP_VERSION } from '../shared/app-version'
 
 interface SaveFileOptions {
   title?: string
@@ -27,17 +28,12 @@ export function registerIpc(): void {
   // ---- 管理员密码文件 ----
   ipcMain.handle('pwd:status', async () => {
     const s = await resolvePwdPath()
-    return { exists: s.exists, path: s.path, dir: s.dir, writable: s.writable }
+    return { exists: s.exists, path: s.path, dir: s.dir, writable: s.writable, inRunDir: s.inRunDir }
   })
 
   ipcMain.handle('pwd:verify', async (_e, pwd: unknown) => {
     if (!validPassword(pwd)) return false
     return verifyAdminPassword(pwd)
-  })
-
-  ipcMain.handle('pwd:create', async (_e, pwd: unknown) => {
-    if (!validPassword(pwd)) return { ok: false, path: '', error: '密码格式不正确（长度需为 1-128 字符）' }
-    return createPwdFile(pwd)
   })
 
   // ---- 原生对话框 ----
@@ -98,7 +94,7 @@ export function registerIpc(): void {
   ipcMain.handle('app:info', async () => {
     return {
       name: '牛奶智慧班级积分',
-      version: `${app.getVersion()}B23`,
+      version: APP_VERSION,
       electron: process.versions.electron,
       chrome: process.versions.chrome,
       node: process.versions.node,
